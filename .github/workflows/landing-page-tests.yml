@@ -1,0 +1,68 @@
+name: Landing Page Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+  merge_group:
+    types:
+      - checks_requested
+
+permissions:
+  contents: read ## Required for actions/checkout
+  issues: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  unit_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for Lambda
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lambdas/.nvmrc
+
+      - name: Run Docker Compose for Lambda
+        working-directory: lambdas
+        run: docker compose -f "docker-compose.yml" up -d
+
+      - name: Install dependencies for Lambda
+        working-directory: lambdas
+        run: npm ci
+
+      - name: Create env for Lambda
+        working-directory: lambdas
+        run: cp .env.example .env
+
+      - name: Run unit tests for Lambda
+        working-directory: lambdas
+        run: npm run test
+
+      - name: Run integration tests for Lambda
+        working-directory: lambdas
+        run: npm run test:integration
+
+      - name: Stop containers for Lambda
+        working-directory: lambdas
+        if: always()
+        run: docker compose -f "docker-compose.yml" down
+
+      - name: Set up Node.js for Webapp
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: webapp/.nvmrc
+
+      - name: Install dependencies for Webapp
+        working-directory: webapp
+        run: npm ci
+
+      - name: Run tests for webapp
+        working-directory: webapp
+        run: npm run test

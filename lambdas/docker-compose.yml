@@ -1,0 +1,37 @@
+  
+version: '3'
+services:
+  # Local dev container. Mapped to  port npm run3307
+  mysql-dev:
+    image: "container-registry.oracle.com/mysql/community-server:5.7.16"
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_DATABASE: "brandbot"
+      MYSQL_ROOT_PASSWORD: "password"
+      MYSQL_USER: "user"
+      MYSQL_PASSWORD: "password"
+  # Local Test Container. Mapped to normal port
+  mysql-test:
+    image: "container-registry.oracle.com/mysql/community-server:5.7.16"
+    ports:
+      - "3306:3306"
+    volumes:
+      - test_db_data:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: "brandbot"
+      MYSQL_ROOT_PASSWORD: "password"
+      MYSQL_USER: "user"
+      MYSQL_PASSWORD: "password"
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  test_db_data:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs

@@ -1,0 +1,39 @@
+name: JSM Create Standard Change Request
+
+permissions:
+  pull-requests: write
+  contents: write
+  issues: write
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jsm-create-change-request:
+    if: >-
+      github.event.pull_request.merged == true &&
+      contains(
+        github.event.pull_request.labels.*.name,
+        'Standard Change Request'
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: xplor/reusable/.github/actions/jsm-change-request@latest-jsm
+        with:
+          COMMAND: create-change-request
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JSM_USER: ${{ secrets.JSM_USER }}
+          JSM_TOKEN: ${{ secrets.JSM_TOKEN }}
+          JSM_TEMPLATE_KEY: ${{ secrets.JSM_TEMPLATE_KEY }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY }}
+          XCS_GITHUB_LOGIN_EMAIL_MAP: ${{ secrets.XCS_GITHUB_LOGIN_EMAIL_MAP }}

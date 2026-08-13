@@ -1,0 +1,18 @@
+# package directories
+node_modules
+jspm_packages
+
+# Serverless directories
+.serverless
+
+# Jest Coverage
+coverage
+
+# Babel transpiled code
+dist
+
+# Local environment variables
+.env
+
+# macOS
+.DS_Store

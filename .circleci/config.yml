@@ -1,0 +1,114 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@1.2.1
+
+jobs:
+  webapp-build-and-deploy-staging:
+    executor: aws-cli/default
+    docker:
+      - image: circleci/node:12
+    working_directory: ~/landing-page-service
+    steps:
+      - checkout
+      - run: cd webapp && npm install
+      - run: cd webapp && npm run build-staging
+      - aws-cli/setup:
+          profile-name: default
+      - run: aws s3 sync ./webapp/dist/static/js s3://assets.brandbot.com/landing-page-service/staging/js
+      - run: aws s3 sync ./webapp/dist/static/css s3://assets.brandbot.com/landing-page-service/staging/css
+      - run: aws cloudfront create-invalidation --distribution-id E2NO690MPFW4VW --paths "/landing-page-service/staging/js/*"
+  
+  # webapp-build-and-deploy-prod:
+  #   executor: aws-cli/default
+  #   docker:
+  #     - image: circleci/node:12
+  #   working_directory: ~/landing-page-service
+  #   steps:
+  #     - checkout
+  #     # - attach_workspace:
+  #     #     at: ~/landing-page-service
+  #     - run: cd webapp && npm install
+  #     - run: cd webapp && npm run build
+  #     - aws-cli/setup:
+  #         profile-name: default
+  #     - run: aws s3 sync ./webapp/dist/static/js s3://assets.brandbot.com/landing-page-service/prod/js
+  #     - run: aws s3 sync ./webapp/dist/static/css s3://assets.brandbot.com/landing-page-service/prod/css
+  #     - run: aws cloudfront create-invalidation --distribution-id E2NO690MPFW4VW --paths "/landing-page-service/prod/js/*"
+
+  api-build:
+    docker: 
+      - image: circleci/node:12
+    working_directory: ~/landing-page-service
+    steps:
+      - checkout
+      - run: cd lambdas && npm install
+      - run: cd lambdas && npm run build-tsc
+      - run: cd lambdas && npm run build
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  api-test:
+    docker:
+      - image: circleci/node:12
+      - image: circleci/redis:latest
+      - image: circleci/mysql:5.7
+        environment:
+          MYSQL_DATABASE: "brandbot"
+          MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_USER: "user"
+          MYSQL_PASSWORD: "password"
+    working_directory: ~/landing-page-service
+    steps:
+      - attach_workspace:
+          at: .
+      - run: cd lambdas && npm run test:integration
+    
+  api-deploy-staging:
+    executor: aws-cli/default
+    working_directory: ~/landing-page-service
+    steps:
+      - attach_workspace:
+          at: .
+      - aws-cli/setup:
+          profile-name: default
+      - run: cd lambdas && npm run deploy-staging
+    
+workflows:
+  version: 2
+  webapp-deploy:
+    jobs:
+      # Deploy API to staging after every merge
+      # Wait for approval to deploy prod
+      - api-build
+      - api-test:
+          requires:
+            - api-build
+      - api-deploy-staging:
+          filters:
+            branches:
+              only: master
+          requires:
+            - api-test
+
+      # Deploy Vue App to staging 
+      # after every merge + api deploy
+      # Wait for approval to deploy prod
+      - webapp-build-and-deploy-staging:
+          requires:
+            - api-deploy-staging
+          filters:
+            branches:
+              only: master
+            
+      # - webapp-approve-deploy-prod:
+      #     type: approval
+      #     filters:
+      #       branches:
+      #         only: master
+
+      # - webapp-build-and-deploy-prod:
+      #     requires:
+      #       - webapp-approve-deploy-prod

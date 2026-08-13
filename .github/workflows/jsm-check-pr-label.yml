@@ -1,0 +1,30 @@
+name: JSM Check PR Label
+
+permissions:
+  pull-requests: read
+  contents: read
+
+on:
+  pull_request:
+    types: [ opened, synchronize, labeled, unlabeled ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  jsm-check-pr-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: xplor/reusable/.github/actions/jsm-check-pr-label@latest-jsm
+        id: jsm-label
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JSM_USER: ${{ secrets.JSM_USER }}
+          JSM_TOKEN: ${{ secrets.JSM_TOKEN }}
+          JSM_TEMPLATE_KEY: ${{ secrets.JSM_TEMPLATE_KEY }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY }}
+          XCS_GITHUB_LOGIN_EMAIL_MAP: ${{ secrets.XCS_GITHUB_LOGIN_EMAIL_MAP }}

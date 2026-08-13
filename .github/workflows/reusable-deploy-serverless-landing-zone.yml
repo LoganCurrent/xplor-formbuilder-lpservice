@@ -1,0 +1,227 @@
+name: reusable - Deploy Serverless Package
+
+on:
+  workflow_call:
+    inputs:
+      ENVIRONMENT:
+        type: string
+        required: true
+      STAGE:
+        type: string
+        required: true
+      WORKING_DIRECTORY:
+        type: string
+        required: true
+      DEPLOY_TYPE:
+        type: string
+        required: true
+      JSM_GRACEFUL_EXIT:
+        type: string
+        required: false
+        default: 'false'
+      JSM_ENABLED:
+        description: >-
+          When true, run deploy log capture, health URL extraction, and JSM
+          transition jobs for this service.
+        type: boolean
+        required: false
+        default: false
+      HEALTH_CHECK_URL:
+        description: >-
+          Optional externally reachable health endpoint to use as JSM proof
+          after a prod deployment.
+        type: string
+        required: false
+        default: ''
+      JSM_PROOF_URL_LIST:
+        description: >-
+          Optional newline-separated proof URLs to attach when moving the JSM
+          ticket to deployed. Use this for non-HTTP Lambdas or extra evidence.
+        type: string
+        required: false
+        default: ''
+    outputs:
+      health_check_url:
+        description: Health check endpoint URL from the deployment (prod only)
+        value: ${{ jobs.deploy.outputs.health_check_url }}
+      proof_url_list:
+        description: >-
+          Newline-separated proof URLs resolved from the deployment (prod only).
+          Consumed by the downstream jsm-move-to-deployed job.
+        value: ${{ jobs.deploy.outputs.proof_url_list }}
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  deploy:
+    defaults:
+      run:
+        working-directory: ${{ inputs.WORKING_DIRECTORY }}
+    name: Deploy Serverless
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.ENVIRONMENT }}
+    outputs:
+      health_check_url: ${{ steps.resolve-proof-urls.outputs.health_check_url }}
+      proof_url_list: ${{ steps.resolve-proof-urls.outputs.proof_url_list }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{vars.AWS_IAM_ROLE_ARN}}
+          role-session-name: serverless-deployment-${{inputs.STAGE}}-session
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version-file: ${{ inputs.WORKING_DIRECTORY }}/.nvmrc
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Load webapp build env from SSM
+        if: ${{ inputs.DEPLOY_TYPE == 'webapp' }}
+        run: |
+          PREFIX="/landing-page-service/${{ inputs.STAGE }}"
+          VALUE=$(aws ssm get-parameter --name "$PREFIX/CONFIGCAT_SDK_KEY" --with-decryption --query 'Parameter.Value' --output text)
+          echo "::add-mask::$VALUE"
+          # Persist for later steps (each run: is a new shell; webpack reads process.env at build time).
+          echo "CONFIGCAT_SDK_KEY=$VALUE" >> "$GITHUB_ENV"
+          CROWDIN_URL=$(aws ssm get-parameter --name "$PREFIX/VUE_APP_CROWDIN_CDN_URL" --query 'Parameter.Value' --output text)
+          echo "VUE_APP_CROWDIN_CDN_URL=$CROWDIN_URL" >> "$GITHUB_ENV"
+
+      - name: Build project
+        if: ${{ inputs.DEPLOY_TYPE == 'lambda' }}
+        run: npm run build
+
+      - name: Serverless Deploy
+        if: ${{ inputs.DEPLOY_TYPE == 'lambda' }}
+        id: sls-deploy
+        env:
+          ROLE_ARN: ${{ vars.AWS_IAM_ROLE_ARN }}
+        run: |
+          set -o pipefail
+          if [[ "${{ inputs.JSM_ENABLED }}" == "true" ]]; then
+            npx serverless deploy --verbose --stage ${{ inputs.STAGE }} 2>&1 \
+              | tee /tmp/sls-deploy-output.txt
+          else
+            npx serverless deploy --verbose --stage ${{ inputs.STAGE }}
+          fi
+
+      - name: Deploy Webapp to S3
+        if: ${{ inputs.DEPLOY_TYPE == 'webapp' }}
+        run: npm run deploy-${{ inputs.STAGE }}
+
+      - name: Resolve JSM proof URLs
+        id: resolve-proof-urls
+        shell: bash
+        env:
+          INPUT_HEALTH_CHECK_URL: ${{ inputs.HEALTH_CHECK_URL }}
+          INPUT_JSM_PROOF_URL_LIST: ${{ inputs.JSM_PROOF_URL_LIST }}
+          # Browser-viewable run page (clickable in JSM).
+          GITHUB_RUN_PAGE_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # REST endpoint used by the JSM action to fetch + attach proof body
+          # (xplor/reusable injects Authorization: Bearer $GITHUB_TOKEN for *.github.com hosts).
+          GITHUB_RUN_API_URL: https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "${{ inputs.JSM_ENABLED }}" != "true" || "${{ inputs.STAGE }}" != "prod" ]]; then
+            echo "health_check_url=" >> "$GITHUB_OUTPUT"
+            echo "proof_url_list=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          trim() {
+            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+          }
+
+          HEALTH_URL="$(printf '%s' "$INPUT_HEALTH_CHECK_URL" | trim)"
+          if [[ -z "$HEALTH_URL" && -f /tmp/sls-deploy-output.txt ]]; then
+            HEALTH_URL="$(grep -oE 'https://[^[:space:]]+/health' /tmp/sls-deploy-output.txt | head -1 || true)"
+          fi
+
+          if [[ -z "$HEALTH_URL" ]]; then
+            echo "::notice::No health check URL configured or found in deploy output; using generic proof URLs only"
+          fi
+
+          {
+            echo "health_check_url=$HEALTH_URL"
+            echo "proof_url_list<<EOF"
+            [[ -n "$HEALTH_URL" ]] && echo "$HEALTH_URL"
+            while IFS= read -r proof_url; do
+              proof_url="$(printf '%s' "$proof_url" | trim)"
+              [[ -n "$proof_url" ]] && echo "$proof_url"
+            done <<< "$INPUT_JSM_PROOF_URL_LIST"
+            echo "$GITHUB_RUN_PAGE_URL"
+            echo "$GITHUB_RUN_API_URL"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # Smoke check only; failures don't block JSM (continue-on-error).
+      - name: Verify health check endpoint
+        if: >-
+          inputs.JSM_ENABLED &&
+          inputs.STAGE == 'prod' &&
+          steps.resolve-proof-urls.outputs.health_check_url != ''
+        continue-on-error: true
+        shell: bash
+        run: |
+          curl --fail --show-error --location --max-time 30 \
+            "${{ steps.resolve-proof-urls.outputs.health_check_url }}" \
+            > /tmp/health-check-response.txt
+
+  jsm-move-to-deploying:
+    name: JSM move to deploying
+    needs: deploy
+    if: >-
+      inputs.JSM_ENABLED &&
+      inputs.STAGE == 'staging' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: xplor/reusable/.github/actions/jsm-change-request@latest-jsm
+        with:
+          COMMAND: move-to-deploying
+          GRACEFUL_EXIT: ${{ inputs.JSM_GRACEFUL_EXIT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JSM_USER: ${{ secrets.JSM_USER }}
+          JSM_TOKEN: ${{ secrets.JSM_TOKEN }}
+          JSM_TEMPLATE_KEY: ${{ secrets.JSM_TEMPLATE_KEY }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY }}
+          XCS_GITHUB_LOGIN_EMAIL_MAP: ${{ secrets.XCS_GITHUB_LOGIN_EMAIL_MAP }}
+
+  jsm-move-to-deployed:
+    name: JSM move to deployed
+    needs: deploy
+    if: >-
+      inputs.JSM_ENABLED &&
+      inputs.STAGE == 'prod' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: xplor/reusable/.github/actions/jsm-change-request@latest-jsm
+        with:
+          COMMAND: move-to-deployed
+          GRACEFUL_EXIT: ${{ inputs.JSM_GRACEFUL_EXIT }}
+          SKIP_CANCEL_OLDER_PENDING: 'true'
+          CATCH_UP_MERGED_PR_LIMIT: '10'
+          PROOF_URL_LIST: ${{ needs.deploy.outputs.proof_url_list }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JSM_USER: ${{ secrets.JSM_USER }}
+          JSM_TOKEN: ${{ secrets.JSM_TOKEN }}
+          JSM_TEMPLATE_KEY: ${{ secrets.JSM_TEMPLATE_KEY }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_APP_ID }}
+          XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY: ${{ secrets.XCS_GITHUB_WORKFLOW_AUTOMATION_PRIVATE_KEY }}
+          XCS_GITHUB_LOGIN_EMAIL_MAP: ${{ secrets.XCS_GITHUB_LOGIN_EMAIL_MAP }}

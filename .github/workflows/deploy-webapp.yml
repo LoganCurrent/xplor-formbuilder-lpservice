@@ -1,0 +1,58 @@
+name: Deploy Web App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - webapp/**
+  workflow_dispatch:
+    inputs:
+      jsm_graceful_exit:
+        type: choice
+        description: >-
+          Ignore JSM errors. Set to true to deploy even if
+          JSM steps fail.
+        default: 'false'
+        options:
+          - 'false'
+          - 'true'
+
+# Applies to all jobs (including reusable workflow calls); override per-job only if needed.
+permissions:
+  id-token: write # Required to get the ID Token that will be used for OIDC
+  contents: write # Required for actions/checkout
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  deploy-staging:
+    name: Deploy Staging
+    concurrency:
+      group: ${{github.repository}}-deploy-staging
+    uses: ./.github/workflows/reusable-deploy-serverless-landing-zone.yml
+    secrets: inherit
+    with:
+      ENVIRONMENT: staging
+      STAGE: staging
+      WORKING_DIRECTORY: webapp
+      DEPLOY_TYPE: webapp
+      JSM_ENABLED: true
+      JSM_GRACEFUL_EXIT: ${{ inputs.jsm_graceful_exit || 'false' }}
+
+  deploy-prd:
+    name: Deploy Prod
+    needs: deploy-staging
+    concurrency:
+      group: ${{github.repository}}-deploy-prd
+    uses: ./.github/workflows/reusable-deploy-serverless-landing-zone.yml
+    secrets: inherit
+    with:
+      ENVIRONMENT: prod
+      STAGE: prod
+      WORKING_DIRECTORY: webapp
+      DEPLOY_TYPE: webapp
+      JSM_ENABLED: true
+      JSM_GRACEFUL_EXIT: ${{ inputs.jsm_graceful_exit || 'false' }}
+      # S3 static webapp; no HTTP health endpoint. JSM proof uses GitHub run URLs.

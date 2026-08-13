@@ -1,0 +1,36 @@
+{
+  "labels": {
+    "onlyRemaining": "Only {count} remaining",
+    "outOfStock": "This item is out of stock!",
+    "priceIncludesTax": "Price includes tax",
+    "priceExcludesTax": "Price does not include tax",
+    "needHelpEmail": "Need help? Email us at",
+    "needHelpCall": "Need help? Call us at",
+    "needHelpEmailAndCall": "Need help? Email us at {email} or call us at {phone}",
+    "signInWithCredentials": "Sign In with your {brand} credentials",
+    "purchaseSuccessful": "Your purchase was successful.",
+    "redirecting": "You will be redirected in 3 seconds...",
+    "fetchingData": "Fetching data...",
+    "buildingCart": "Building cart...",
+    "finalizingCart": "Finalizing cart...",
+    "loadingCheckout": "Loading Checkout...",
+    "loadingNote": "Note: this can take up to 10 seconds"
+  },
+  "buttons": {
+    "signIn": "Sign In",
+    "createAccount": "Create Account"
+  },
+  "errors": {
+    "buildingCart": "Error building cart.",
+    "applyingDiscount": "Error applying discount to cart.",
+    "lp": {
+      "permission_denied": "Do not have right permissions to use this page.",
+      "capture_view_failed": "Could not capture LP view.",
+      "capture_checkout_failed": "Could not complete LP checkout.",
+      "cart_build_failed": "Could not build cart.",
+      "discount_failed": "Could not apply discount.",
+      "not_found": "Landing page not found."
+    },
+    "server": "Something went wrong. Please try again later."
+  }
+}

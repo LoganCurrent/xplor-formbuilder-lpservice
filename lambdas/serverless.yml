@@ -1,0 +1,111 @@
+service: landing-page-service
+
+useDotenv: true
+
+plugins:
+  - serverless-offline
+  - serverless-domain-manager
+  - serverless-dotenv-plugin
+  - serverless-offline-sqs
+
+resources:
+  Resources:
+    landingPageServiceQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: landing-page-service_${opt:stage}_checkout_events
+        RedrivePolicy:
+          deadLetterTargetArn:
+            Fn::GetAtt:
+              - landingPageServiceDLQ
+              - Arn
+          maxReceiveCount: 5
+        VisibilityTimeout: 300
+
+    landingPageServiceDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: landing-page-service_${opt:stage}_checkout_events_dlq
+        MessageRetentionPeriod: 1209600  
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  stage: ${opt:stage}
+  deploymentBucket:
+    name: brandbot-serverless
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:PutObjectAcl
+      Resource:
+        - "arn:aws:s3:::brandbot-checkout.com/*"
+    - Effect: Allow
+      Action:
+        - secretsmanager:GetSecretValue
+      Resource:
+        - "*"
+    - Effect: Allow
+      Action:
+        - sqs:SendMessage
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+        - sqs:GetQueueAttributes
+      Resource:
+        - Fn::GetAtt: [landingPageServiceQueue, Arn]
+        - Fn::GetAtt: [landingPageServiceDLQ, Arn]
+  environment:
+    APP_NAME: ${self:service}
+    ENV: ${self:custom.stage}
+    DATADOG_API_KEY: ${env:DATADOG_API_KEY, ssm:${self:custom.secretsPrefix}/DATADOG_API_KEY}
+    REDIS_HOST: ${env:REDIS_HOST, ssm:${self:custom.secretsPrefix}/REDIS_HOST}
+    REDIS_PORT: ${env:REDIS_PORT, ssm:${self:custom.secretsPrefix}/REDIS_PORT}
+    REDIS_V2_HOST: ${env:REDIS_V2_HOST, ssm:${self:custom.secretsPrefix}/REDIS_V2_HOST}
+    REDIS_V2_PORT: ${env:REDIS_V2_PORT, ssm:${self:custom.secretsPrefix}/REDIS_V2_PORT}
+    DB_SECRET_NAME: ${env:DB_SECRET_NAME, ssm:${self:custom.secretsPrefix}/DB_SECRET_NAME}
+    CONFIGCAT_SDK_KEY: ${env:CONFIGCAT_SDK_KEY, ssm:${self:custom.secretsPrefix}/CONFIGCAT_SDK_KEY}
+    CORALOGIX_API_KEY: ${env:CORALOGIX_API_KEY, ssm:${self:custom.secretsPrefix}/CORALOGIX_API_KEY}
+    CORALOGIX_API_HOST: ${env:CORALOGIX_API_HOST, ssm:${self:custom.secretsPrefix}/CORALOGIX_API_HOST}
+    CORALOGIX_API_PATH: ${env:CORALOGIX_API_PATH, ssm:${self:custom.secretsPrefix}/CORALOGIX_API_PATH}
+    CORALOGIX_APP_NAME: ${env:CORALOGIX_APPLICATION_NAME, ssm:${self:custom.secretsPrefix}/CORALOGIX_APP_NAME}
+    LANDING_EVENT_QUEUE_URL: ${env:LANDING_EVENT_QUEUE_URL, self:custom.landingPageQueueUrl, null}
+  vpc:
+    securityGroupIds: ${env:SECURITY_GROUP_IDS, ssm:${self:custom.secretsPrefix}/SECURITY_GROUP_IDS}
+    subnetIds: ${env:SUBNET_IDS, ssm:${self:custom.secretsPrefix}/SUBNET_IDS}
+
+custom:
+  stage: ${opt:stage, "local"}
+  secretsPrefix: /${self:service}/${self:custom.stage}
+  customDomain:
+    domainName: "landing-pages.brndbot.net"
+    certificateName: "Wildcard brndbot.net"
+    basePath: ${self:custom.stage}
+    stage: ${self:custom.stage}
+    createRoute53Record: false
+  landingPageQueueUrl: 
+    Fn::GetAtt: [landingPageServiceQueue, QueueUrl]
+functions:
+  landingPageService:
+    name: ${self:custom.stage}-landing-page-service
+    handler: dist/index.handler
+    events: 
+      - http:
+          method: any
+          path: '{proxy+}'
+      - http:
+          method: any
+          path: /
+
+  queueWorker:
+    name: ${self:custom.stage}-landing-page-queue-worker
+    handler: dist/workers/queue-worker.handler
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [landingPageServiceQueue, Arn]
+          batchSize: 1
+          maximumBatchingWindow: 30
