@@ -12,12 +12,26 @@
    </script>
    <CircleSpinner v-if="parameters === null"></CircleSpinner>
    <div v-else>
-   <el-container :style="'background-color: ' + parameters.template['key-page-color']">
+   <el-container :style="pageChromeStyle">
     <el-header height="auto" :style="{'background-color': parameters.template['key-page-header-color']}">
-      <img :src="parameters.template['key-logo']" :style="'width: ' + parameters.template['key-logo-width'] + 'px'" :alt="parameters.account_name" />
+      <img
+        v-if="parameters.template['key-logo']"
+        :src="parameters.template['key-logo']"
+        :style="'width: ' + parameters.template['key-logo-width'] + 'px'"
+        :alt="parameters.account_name"
+      />
     </el-header>
       <el-main>
-          <Summary v-if="mode == 'SHOW_SUMMARY'" :parameters="parameters" :mtoauth="mtoauth" />
+          <Summary
+            v-if="mode == 'SHOW_SUMMARY'"
+            :parameters="parameters"
+            :mtoauth="mtoauth"
+            :design-mode="designMode"
+            :editor-layout="editorLayout"
+            :selected-block-id="selectedBlockId"
+            :active-drop-after-id="activeDropAfterId"
+            @select-block="selectedBlockId = $event"
+          />
           <ActFast v-if="mode === 'SHOW_ACT_FAST'" :parameters="parameters" :mtoauth="mtoauth" />
           <MTLogin v-if="mode === 'SHOW_MT_LOGIN'" :parameters="parameters" :mtoauth="mtoauth" />
           <MTSignUp v-if="mode === 'SHOW_MT_SIGNUP'" :parameters="parameters" :mtoauth="mtoauth" />
@@ -53,6 +67,15 @@ import {
   getReachConfig
 } from '../utils/reach'
 import translationMixin from '@/mixins/translationMixin'
+import { isEditorMessage, isDesignModeFlagSet, postToParent } from '@/utils/design-mode-protocol'
+import {
+  parsePageLayout,
+  insertBlockAfter,
+  updateBlockProps,
+  removeBlock,
+  moveBlockAfter,
+  PAGE_LAYOUT_TEMPLATE_KEY
+} from '@/utils/page-layout'
 import { initI18n } from '@/i18n'
 import { backendErrorKeyToI18nKey } from '@/i18n/errorKeyMap'
 import {
@@ -74,9 +97,14 @@ export default {
     CircleSpinner
   },
   created () {
+    this.designMode = isDesignModeFlagSet()
     this.getParameters()
   },
   mounted () {
+    window.addEventListener('message', this.onEditorMessage)
+    if (window.parent !== window) {
+      postToParent('ready')
+    }
     EventBus.$on('show_act_fast', () => {
       this.mode = 'SHOW_ACT_FAST'
     })
@@ -101,6 +129,74 @@ export default {
     if (urlParams.get('hidden')) EventBus.$emit('show_hidden')
   },
   methods: {
+    currentLayout () {
+      if (this.editorLayout) {
+        return this.editorLayout
+      }
+      var template = this.parameters && this.parameters.template
+      return parsePageLayout(template && template[PAGE_LAYOUT_TEMPLATE_KEY])
+    },
+    applyLayout (layout) {
+      this.editorLayout = layout
+      postToParent('layout', { layout: layout })
+    },
+    onEditorMessage (event) {
+      var data = event && event.data
+      if (!isEditorMessage(data)) {
+        return
+      }
+      if (data.type === 'init') {
+        this.designMode = true
+        if (data.layout) {
+          this.editorLayout = data.layout
+        }
+        return
+      }
+      if (data.type === 'setLayout' && data.layout) {
+        this.designMode = true
+        this.editorLayout = data.layout
+        return
+      }
+      if (data.type === 'select') {
+        this.selectedBlockId = data.id || null
+        return
+      }
+      if (data.type === 'dragStart') {
+        this.activeDropAfterId = ''
+        return
+      }
+      if (data.type === 'dragEnd') {
+        this.activeDropAfterId = null
+        return
+      }
+      var layout = this.currentLayout()
+      if (!layout) {
+        return
+      }
+      if (data.type === 'drop' && data.blockType) {
+        var newBlock = {
+          id: 'b-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+          type: data.blockType,
+          locked: false,
+          props: {}
+        }
+        this.applyLayout(insertBlockAfter(layout, data.afterId == null ? null : data.afterId, newBlock))
+        this.selectedBlockId = newBlock.id
+        return
+      }
+      if (data.type === 'updateBlock' && data.id && data.props) {
+        this.applyLayout(updateBlockProps(layout, data.id, data.props))
+        return
+      }
+      if (data.type === 'removeBlock' && data.id) {
+        this.applyLayout(removeBlock(layout, data.id))
+        this.selectedBlockId = null
+        return
+      }
+      if (data.type === 'moveBlock' && data.id) {
+        this.applyLayout(moveBlockAfter(layout, data.id, data.afterId == null ? null : data.afterId))
+      }
+    },
     initPixel () {
       window.fbq('init', this.parameters.pixel.id)
       window.fbq('track', 'PageView')
@@ -310,6 +406,19 @@ export default {
       }
     }
   },
+  computed: {
+    pageChromeStyle () {
+      var template = (this.parameters && this.parameters.template) || {}
+      var font = template['key-page-font-family']
+      var style = { backgroundColor: template['key-page-color'] }
+      if (font) {
+        style.fontFamily = String(font).indexOf(',') >= 0
+          ? font
+          : "'" + font + "', Helvetica, Arial, sans-serif"
+      }
+      return style
+    }
+  },
   data () {
     return {
       // eslint-disable-next-line no-undef
@@ -321,10 +430,15 @@ export default {
       loading: true,
       loggedIn: false,
       email: '',
-      mode: 'SHOW_SUMMARY'
+      mode: 'SHOW_SUMMARY',
+      designMode: false,
+      editorLayout: null,
+      selectedBlockId: null,
+      activeDropAfterId: null
     }
   },
   beforeDestroy () {
+    window.removeEventListener('message', this.onEditorMessage)
     EventBus.$off('show_mt_signin')
     EventBus.$off('show_mt_signup')
     EventBus.$off('show_mt_checkout')
@@ -342,6 +456,7 @@ export default {
     align-items: center;
     justify-content: center;
     width: 100%;
+    min-height: 3.5rem;
     background-color: #ffffff;
     box-shadow: 0 0 4px 0 rgba(97, 112, 128, .11);
     padding-top: 0.625rem;
