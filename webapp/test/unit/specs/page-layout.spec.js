@@ -6,6 +6,7 @@ import {
   moveBlockAfter,
   createDefaultLayout,
   spacingStyleFromBlock,
+  paddingStyleFromBlock,
   canDropInColumn,
   SYSTEM_CHECKOUT,
   SYSTEM_TITLE
@@ -80,9 +81,30 @@ describe('page-layout', () => {
       props: { marginTop: 20, paddingLeft: 8 }
     })).toEqual(expect.objectContaining({
       marginTop: '20px',
-      marginBottom: '8px',
-      paddingLeft: '8px'
+      marginBottom: '8px'
     }))
+    expect(spacingStyleFromBlock({
+      type: 'heading',
+      props: { paddingLeft: 8 }
+    }).paddingLeft).toBeUndefined()
+    expect(paddingStyleFromBlock({
+      type: 'button',
+      props: { paddingTop: 24 }
+    })).toEqual({
+      paddingTop: '24px',
+      paddingRight: '20px',
+      paddingBottom: '12px',
+      paddingLeft: '20px'
+    })
+    expect(paddingStyleFromBlock({
+      type: SYSTEM_CHECKOUT,
+      props: { paddingLeft: 32 }
+    })).toEqual({
+      paddingTop: '12px',
+      paddingRight: '20px',
+      paddingBottom: '12px',
+      paddingLeft: '32px'
+    })
   })
 
   it('parses nested column children', () => {

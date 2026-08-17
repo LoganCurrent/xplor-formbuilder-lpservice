@@ -150,7 +150,7 @@ describe('Summary.vue', () => {
     expect(wrapper.find('.name').element.style.textAlign).toBe('center');
   });
 
-  it('applies margin and padding props on a layout block', () => {
+  it('applies margin props on a layout block', () => {
     const layout = {
       version: 1,
       blocks: [
@@ -182,7 +182,44 @@ describe('Summary.vue', () => {
 
     const shell = wrapper.find('[data-block-id="sys-title"]');
     expect(shell.element.style.marginBottom).toBe('32px');
-    expect(shell.element.style.paddingLeft).toBe('12px');
+    expect(shell.element.style.paddingLeft).toBe('');
+  });
+
+  it('applies padding on the Buy now button, not the checkout row', () => {
+    const layout = {
+      version: 1,
+      blocks: [
+        { id: 'sys-title', type: 'system.title', locked: true },
+        { id: 'sys-description', type: 'system.description', locked: true },
+        { id: 'sys-price', type: 'system.price', locked: true },
+        { id: 'sys-remaining', type: 'system.remaining', locked: true },
+        {
+          id: 'sys-checkout',
+          type: 'system.checkoutPackage',
+          locked: true,
+          props: { paddingTop: 24, paddingLeft: 40 }
+        }
+      ]
+    };
+    const parameters = {
+      name: 'Test Product',
+      description: 'Test Description',
+      product: { price: 100 },
+      currency: 'USD',
+      button_text: 'Buy now',
+      button_color: '#00152A',
+      template: {
+        'key-page-layout': JSON.stringify(layout)
+      }
+    };
+    const wrapper = mount(Summary, {
+      propsData: { parameters }
+    });
+
+    const shell = wrapper.find('[data-block-id="sys-checkout"]');
+    expect(shell.element.style.paddingTop).toBe('');
+    expect(wrapper.find('.custom').element.style.paddingTop).toBe('24px');
+    expect(wrapper.find('.custom').element.style.paddingLeft).toBe('40px');
   });
 
   it('renders nested heading inside a columns block', () => {

@@ -196,6 +196,10 @@ export function ensureCheckoutPackageLast (layout) {
   return next
 }
 
+export function usesButtonPadding (type) {
+  return type === CUSTOM_BUTTON || type === SYSTEM_CHECKOUT
+}
+
 export function defaultSpacingForType (type) {
   var marginBottom = 16
   if (type === SYSTEM_TITLE || type === CUSTOM_HEADING) marginBottom = 8
@@ -203,19 +207,28 @@ export function defaultSpacingForType (type) {
   else if (type === SYSTEM_PRICE) marginBottom = 40
   else if (type === SYSTEM_CHECKOUT) marginBottom = 0
   else if (type === CUSTOM_COLUMNS) marginBottom = 16
+  var isButton = usesButtonPadding(type)
   return {
     marginTop: type === CUSTOM_DIVIDER ? 16 : 0,
     marginRight: 0,
     marginBottom: marginBottom,
     marginLeft: 0,
-    paddingTop: 0,
-    paddingRight: 0,
-    paddingBottom: 0,
-    paddingLeft: 0
+    paddingTop: isButton ? 12 : 0,
+    paddingRight: isButton ? 20 : 0,
+    paddingBottom: isButton ? 12 : 0,
+    paddingLeft: isButton ? 20 : 0
   }
 }
 
 export function spacingStyleFromBlock (block) {
+  return styleFromSpacingKeys(block, ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'])
+}
+
+export function paddingStyleFromBlock (block) {
+  return styleFromSpacingKeys(block, ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'])
+}
+
+function styleFromSpacingKeys (block, keys) {
   var defaults = defaultSpacingForType(block && block.type)
   var props = (block && block.props) || {}
   function px (key) {
@@ -224,16 +237,11 @@ export function spacingStyleFromBlock (block) {
     var parsed = Number(value)
     return isNaN(parsed) ? defaults[key] : parsed
   }
-  return {
-    marginTop: px('marginTop') + 'px',
-    marginRight: px('marginRight') + 'px',
-    marginBottom: px('marginBottom') + 'px',
-    marginLeft: px('marginLeft') + 'px',
-    paddingTop: px('paddingTop') + 'px',
-    paddingRight: px('paddingRight') + 'px',
-    paddingBottom: px('paddingBottom') + 'px',
-    paddingLeft: px('paddingLeft') + 'px'
-  }
+  var style = {}
+  keys.forEach(function (key) {
+    style[key] = px(key) + 'px'
+  })
+  return style
 }
 
 export function parsePageLayout (raw) {

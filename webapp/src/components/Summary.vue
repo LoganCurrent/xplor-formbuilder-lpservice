@@ -17,7 +17,7 @@
       </div>
       <el-button type="primary" class="custom"
           :disabled="parameters.globalLimit && parameters.remaining === 0"
-          :style="'width: 100%; background-color: ' + parameters.button_color + '; border-color: ' + parameters.button_color"
+          :style="checkoutButtonStyle(null)"
           @click="onCheckoutClick">
         {{ parameters.button_text }}
       </el-button>
@@ -75,7 +75,7 @@
           <template v-else-if="block.type === 'system.checkoutPackage'">
             <el-button type="primary" class="custom"
                 :disabled="parameters.globalLimit && parameters.remaining === 0"
-                :style="'width: 100%; background-color: ' + parameters.button_color + '; border-color: ' + parameters.button_color"
+                :style="checkoutButtonStyle(block)"
                 @click="onCheckoutClick">
               {{ parameters.button_text }}
             </el-button>
@@ -109,7 +109,7 @@ import EventBus from '@/event-bus'
 import HelpFooter from './HelpFooter.vue'
 import SummaryCustomBlock from './SummaryCustomBlock.vue'
 import translationMixin from '@/mixins/translationMixin'
-import { parsePageLayout, PAGE_LAYOUT_TEMPLATE_KEY, spacingStyleFromBlock } from '@/utils/page-layout'
+import { parsePageLayout, PAGE_LAYOUT_TEMPLATE_KEY, paddingStyleFromBlock, spacingStyleFromBlock } from '@/utils/page-layout'
 import { postToParent } from '@/utils/design-mode-protocol'
 
 export default {
@@ -221,6 +221,14 @@ export default {
       return Object.assign({
         textAlign: this.blockAlign(block)
       }, spacingStyleFromBlock(block))
+    },
+    checkoutButtonStyle (block) {
+      var color = (this.parameters && this.parameters.button_color) || '#00152A'
+      return Object.assign({
+        width: '100%',
+        backgroundColor: color,
+        borderColor: color
+      }, paddingStyleFromBlock(block || { type: 'system.checkoutPackage' }))
     },
     reportSlots () {
       var self = this

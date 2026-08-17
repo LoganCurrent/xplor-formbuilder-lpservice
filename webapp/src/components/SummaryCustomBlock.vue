@@ -118,6 +118,7 @@
 
 <script>
 import HelpFooter from './HelpFooter.vue'
+import { paddingStyleFromBlock } from '@/utils/page-layout'
 
 export default {
   name: 'SummaryCustomBlock',
@@ -197,12 +198,11 @@ export default {
     },
     buttonStyle () {
       var props = this.block.props || {}
-      return {
+      return Object.assign({
         display: 'inline-block',
         width: 'auto',
         minWidth: '10rem',
         textAlign: 'center',
-        padding: '0.75rem 1.25rem',
         backgroundColor: props.backgroundColor || '#00152A',
         color: props.color || '#FFFFFF',
         border: 'none',
@@ -211,7 +211,7 @@ export default {
         fontWeight: 600,
         margin: 0,
         cursor: this.designMode ? 'default' : 'pointer'
-      }
+      }, paddingStyleFromBlock(this.block))
     },
     dividerStyle () {
       var props = this.block.props || {}
@@ -254,7 +254,11 @@ export default {
     },
     checkoutButtonStyle () {
       var color = (this.parameters && this.parameters.button_color) || '#00152A'
-      return 'width: 100%; background-color: ' + color + '; border-color: ' + color
+      return Object.assign({
+        width: '100%',
+        backgroundColor: color,
+        borderColor: color
+      }, paddingStyleFromBlock(this.block))
     },
     hasTaxInfo () {
       return this.parameters && this.parameters.hasOwnProperty('displayInclusiveTax')
