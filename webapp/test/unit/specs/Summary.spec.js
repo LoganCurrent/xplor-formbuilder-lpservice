@@ -87,6 +87,59 @@ describe('Summary.vue', () => {
     expect(descriptionElement.html()).toBe('<div class="description"></div>');
   });
 
+  it('still renders the card when product is missing', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const layout = {
+      version: 1,
+      blocks: [
+        { id: 'sys-title', type: 'system.title', locked: true },
+        { id: 'sys-description', type: 'system.description', locked: true },
+        { id: 'sys-price', type: 'system.price', locked: true },
+        { id: 'sys-remaining', type: 'system.remaining', locked: true },
+        { id: 'sys-checkout', type: 'system.checkoutPackage', locked: true }
+      ]
+    };
+    const parameters = {
+      name: 'Custom Name',
+      description: 'Custom Description',
+      currency: 'USD',
+      button_text: 'Buy my product',
+      template: {
+        'key-page-layout': JSON.stringify(layout)
+      }
+    };
+    const wrapper = mount(Summary, {
+      propsData: { parameters }
+    });
+
+    expect(wrapper.text()).toContain('Custom Name');
+    expect(wrapper.text()).toContain('Custom Description');
+    expect(wrapper.text()).toContain('Buy my product');
+    expect(wrapper.find('.custom').exists()).toBe(true);
+    expect(wrapper.find('.pricing').text()).toBe('');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('still renders the card when product price is null', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const parameters = {
+      name: 'Custom Name',
+      description: 'Custom Description',
+      product: { price: null },
+      currency: 'USD',
+      button_text: 'Buy now'
+    };
+    const wrapper = mount(Summary, {
+      propsData: { parameters }
+    });
+
+    expect(wrapper.text()).toContain('Custom Name');
+    expect(wrapper.find('.custom').exists()).toBe(true);
+    expect(wrapper.find('.pricing').text()).toBe('');
+    warn.mockRestore();
+  });
+
   it('renders a custom heading from key-page-layout between title and description', () => {
     const layout = {
       version: 1,

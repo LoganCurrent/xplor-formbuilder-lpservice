@@ -146,6 +146,9 @@ export default {
       this.parameters.discount = this.parameters.displayPrice
     }
     this.loadTranslationsFlag(this.parameters.account_id)
+    if (!this.hasProductPrice) {
+      console.warn('Landing page params are missing product price; skipping price render')
+    }
   },
   mounted () {
     this.reportSlots()
@@ -263,6 +266,19 @@ export default {
         var href = url.indexOf('www.') === 0 ? 'http://' + url : url
         return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + url + '</a>'
       })
+    },
+    formatCurrency (amount) {
+      if (amount == null || amount === '' || !this.parameters || !this.parameters.currency) {
+        return ''
+      }
+      var value = Number(amount)
+      if (isNaN(value)) {
+        return ''
+      }
+      return value.toLocaleString(undefined, {
+        style: 'currency',
+        currency: this.parameters.currency
+      })
     }
   },
   computed: {
@@ -276,25 +292,29 @@ export default {
     hasTaxInfo () {
       return this.parameters.hasOwnProperty('displayInclusiveTax')
     },
+    hasProductPrice () {
+      var product = this.parameters && this.parameters.product
+      return Boolean(product && product.price != null && product.price !== '')
+    },
     price () {
+      if (!this.hasProductPrice) {
+        return ''
+      }
       var basePrice = this.parameters.product.price
       if (this.hasTaxInfo && this.parameters.displayInclusiveTax && this.parameters.tax_rate) {
         basePrice = basePrice * (1 + this.parameters.tax_rate)
       }
-      return Number(basePrice).toLocaleString(undefined, {
-        style: 'currency',
-        currency: this.parameters.currency
-      })
+      return this.formatCurrency(basePrice)
     },
     priceWithDiscount () {
+      if (!this.hasProductPrice) {
+        return ''
+      }
       var basePrice = this.parameters.product.price - this.parameters.discount
       if (this.hasTaxInfo && this.parameters.displayInclusiveTax && this.parameters.tax_rate) {
         basePrice = basePrice * (1 + this.parameters.tax_rate)
       }
-      return Number(basePrice).toLocaleString(undefined, {
-        style: 'currency',
-        currency: this.parameters.currency
-      })
+      return this.formatCurrency(basePrice)
     },
     descriptionWithLinks () {
       if (!this.parameters || !this.parameters.description) return ''
