@@ -335,3 +335,56 @@ export function moveBlockAfter (layout, blockId, afterId) {
   })
   return insertBlockAfter(without, afterExists ? afterId : null, current)
 }
+
+var ALLOWED_INLINE_TAGS = {
+  B: true,
+  STRONG: true,
+  I: true,
+  EM: true,
+  U: true,
+  S: true,
+  STRIKE: true,
+  DEL: true,
+  BR: true
+}
+
+export function sanitizeInlineHtml (html) {
+  var raw = html == null ? '' : String(html)
+  if (!raw) {
+    return ''
+  }
+  if (typeof document === 'undefined' || !document.createElement) {
+    return raw.replace(/<(?!\/?(?:b|strong|i|em|u|s|strike|del|br)\b)[^>]*>/gi, '')
+  }
+  var template = document.createElement('template')
+  template.innerHTML = raw
+  function walk (node) {
+    Array.prototype.slice.call(node.childNodes).forEach(function (child) {
+      if (child.nodeType === 3) {
+        return
+      }
+      if (child.nodeType !== 1) {
+        node.removeChild(child)
+        return
+      }
+      if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE') {
+        node.removeChild(child)
+        return
+      }
+      if (!ALLOWED_INLINE_TAGS[child.tagName]) {
+        while (child.firstChild) {
+          node.insertBefore(child.firstChild, child)
+        }
+        node.removeChild(child)
+        walk(node)
+        return
+      }
+      while (child.attributes && child.attributes.length) {
+        child.removeAttribute(child.attributes[0].name)
+      }
+      walk(child)
+    })
+  }
+  walk(template.content)
+  return template.innerHTML
+}

@@ -9,7 +9,8 @@ import {
   paddingStyleFromBlock,
   canDropInColumn,
   SYSTEM_CHECKOUT,
-  SYSTEM_TITLE
+  SYSTEM_TITLE,
+  sanitizeInlineHtml
 } from '@/utils/page-layout'
 
 describe('page-layout', () => {
@@ -153,5 +154,12 @@ describe('page-layout', () => {
     expect(layout.blocks.some((block) => block.type === SYSTEM_CHECKOUT)).toBe(false)
     const ensured = ensureCheckoutPackageLast(layout)
     expect(ensured.blocks.some((block) => block.type === SYSTEM_CHECKOUT)).toBe(false)
+  })
+
+  it('keeps bold, italic, underline, and strikethrough tags in inline html', () => {
+    expect(sanitizeInlineHtml('<b>Hi</b>')).toBe('<b>Hi</b>')
+    expect(sanitizeInlineHtml('<u>Hi</u>')).toBe('<u>Hi</u>')
+    expect(sanitizeInlineHtml('<s>Hi</s>')).toBe('<s>Hi</s>')
+    expect(sanitizeInlineHtml('<span>Hi</span>')).toBe('Hi')
   })
 })

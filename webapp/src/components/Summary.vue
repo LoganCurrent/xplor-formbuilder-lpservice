@@ -19,7 +19,7 @@
           :disabled="parameters.globalLimit && parameters.remaining === 0"
           :style="checkoutButtonStyle(null)"
           @click="onCheckoutClick">
-        {{ parameters.button_text }}
+        <span v-html="buttonTextHtml"></span>
       </el-button>
       <HelpFooter
         :email="parameters.email"
@@ -77,7 +77,7 @@
                 :disabled="parameters.globalLimit && parameters.remaining === 0"
                 :style="checkoutButtonStyle(block)"
                 @click="onCheckoutClick">
-              {{ parameters.button_text }}
+              <span v-html="buttonTextHtml"></span>
             </el-button>
             <HelpFooter
               :email="parameters.email"
@@ -109,7 +109,7 @@ import EventBus from '@/event-bus'
 import HelpFooter from './HelpFooter.vue'
 import SummaryCustomBlock from './SummaryCustomBlock.vue'
 import translationMixin from '@/mixins/translationMixin'
-import { parsePageLayout, PAGE_LAYOUT_TEMPLATE_KEY, paddingStyleFromBlock, spacingStyleFromBlock } from '@/utils/page-layout'
+import { parsePageLayout, PAGE_LAYOUT_TEMPLATE_KEY, paddingStyleFromBlock, spacingStyleFromBlock, sanitizeInlineHtml } from '@/utils/page-layout'
 import { postToParent } from '@/utils/design-mode-protocol'
 
 export default {
@@ -288,6 +288,13 @@ export default {
       }
       var template = this.parameters && this.parameters.template
       return parsePageLayout(template && template[PAGE_LAYOUT_TEMPLATE_KEY])
+    },
+    buttonTextHtml () {
+      var raw = this.parameters && this.parameters.button_text
+      if (raw == null || raw === '') {
+        return 'Buy now'
+      }
+      return sanitizeInlineHtml(raw)
     },
     hasTaxInfo () {
       return this.parameters.hasOwnProperty('displayInclusiveTax')

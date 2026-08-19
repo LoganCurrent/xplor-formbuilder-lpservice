@@ -4,12 +4,13 @@
       v-if="block.type === 'system.title'"
       class="name"
       :style="systemTextStyle(18, 600)"
-    >{{ (parameters && parameters.name) || '' }}</div>
+      v-html="inlineHtml(parameters && parameters.name, '')"
+    ></div>
     <div
       v-else-if="block.type === 'system.description'"
       class="description"
       :style="systemTextStyle(16, 400)"
-      v-html="descriptionWithLinks"
+      v-html="descriptionHtml"
     ></div>
     <template v-else-if="block.type === 'system.price'">
       <div class="pricing" v-if="parameters && !parameters.discount" :style="systemTextStyle(20, 600)">{{ price }}</div>
@@ -33,7 +34,7 @@
         :style="checkoutButtonStyle"
         @click="$emit('checkout')"
       >
-        {{ (parameters && parameters.button_text) || 'Buy now' }}
+        <span v-html="inlineHtml(parameters && parameters.button_text, 'Buy now')"></span>
       </el-button>
       <HelpFooter
         v-if="parameters"
@@ -46,13 +47,15 @@
       v-else-if="block.type === 'heading'"
       class="lp-heading"
       :style="headingStyle"
-    >{{ block.props && block.props.text || 'Heading' }}</h2>
+      v-html="inlineHtml(block.props && block.props.text, 'Heading')"
+    ></h2>
 
     <p
       v-else-if="block.type === 'text'"
       class="lp-text"
       :style="textStyle"
-    >{{ block.props && block.props.text || '' }}</p>
+      v-html="inlineHtml(block.props && block.props.text, '')"
+    ></p>
 
     <img
       v-else-if="block.type === 'image' && block.props && block.props.src"
@@ -73,13 +76,13 @@
       :style="buttonStyle"
       target="_blank"
       rel="noopener noreferrer"
-    >{{ block.props.text || 'Click here' }}</a>
+    > <span v-html="inlineHtml(block.props && block.props.text, 'Click here')"></span></a>
     <button
       v-else-if="block.type === 'button'"
       type="button"
       class="lp-button"
       :style="buttonStyle"
-    >{{ (block.props && block.props.text) || 'Click here' }}</button>
+    ><span v-html="inlineHtml(block.props && block.props.text, 'Click here')"></span></button>
 
     <hr
       v-else-if="block.type === 'divider'"
@@ -118,7 +121,7 @@
 
 <script>
 import HelpFooter from './HelpFooter.vue'
-import { paddingStyleFromBlock } from '@/utils/page-layout'
+import { paddingStyleFromBlock, sanitizeInlineHtml } from '@/utils/page-layout'
 
 export default {
   name: 'SummaryCustomBlock',
@@ -292,9 +295,23 @@ export default {
         var href = url.indexOf('www.') === 0 ? 'http://' + url : url
         return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + url + '</a>'
       })
+    },
+    descriptionHtml () {
+      var raw = (this.parameters && this.parameters.description) || ''
+      var sanitized = sanitizeInlineHtml(raw)
+      if (/<(?:b|strong|i|em|u|s|strike|del|br)\b/i.test(sanitized)) {
+        return sanitized
+      }
+      return this.descriptionWithLinks
     }
   },
   methods: {
+    inlineHtml (value, fallback) {
+      if (value == null || value === '') {
+        return fallback || ''
+      }
+      return sanitizeInlineHtml(value)
+    },
     systemTextStyle (defaultSize, defaultWeight) {
       var props = (this.block && this.block.props) || {}
       var style = { textAlign: this.blockAlign }
