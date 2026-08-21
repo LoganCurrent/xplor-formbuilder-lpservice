@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="help-footer-wrap">
     <div class="footer" v-if="email && !phone">
       {{ ts('labels.needHelpEmail', 'Need help? Email us at') }}
       <a :href="'mailto:' + email">{{ email }}</a>
@@ -51,16 +51,22 @@ export default {
 </script>
 
 <style scoped>
+  .help-footer-wrap {
+    width: 100%;
+  }
   .footer {
     margin-top: 1rem;
+    margin-left: calc(-1 * var(--card-pad-left, 20px));
+    margin-right: calc(-1 * var(--card-pad-right, 20px));
+    margin-bottom: calc(-1 * var(--card-pad-bottom, 0px));
     padding: 1rem;
     background-color: rgb(235, 244, 250);
+    border-bottom-left-radius: var(--card-radius, 0px);
+    border-bottom-right-radius: var(--card-radius, 0px);
     font-size: .625rem;
     font-weight: 600;
     color: rgb(97, 112, 128);
     text-align: center;
-    margin-right: -20px;
-    margin-left: -20px;
   }
   .footer a {
     color: #2E4457;

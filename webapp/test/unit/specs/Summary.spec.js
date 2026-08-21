@@ -173,6 +173,49 @@ describe('Summary.vue', () => {
     expect(wrapper.find('.custom').exists()).toBe(true);
   });
 
+  it('pins the first pinToBottom block instead of checkout', () => {
+    const layout = {
+      version: 2,
+      blocks: [
+        {
+          id: 'sys-page-section',
+          type: 'section',
+          props: { width: 100 },
+          children: [
+            {
+              id: 'sys-checkout-card',
+              type: 'card',
+              props: {},
+              children: [
+                { id: 'sys-title', type: 'system.title', locked: true },
+                {
+                  id: 'b1',
+                  type: 'button',
+                  locked: false,
+                  props: { text: 'Join now', pinToBottom: true }
+                },
+                { id: 'sys-checkout', type: 'system.checkoutPackage', locked: true }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+    const parameters = {
+      name: 'Test Product',
+      description: 'Test Description',
+      product: { price: 100 },
+      currency: 'USD',
+      button_text: 'Buy now'
+    };
+    const wrapper = mount(Summary, {
+      propsData: { parameters, editorLayout: layout }
+    });
+
+    expect(wrapper.find('[data-block-id="b1"]').element.parentElement.classList.contains('lp-checkout-anchor')).toBe(true);
+    expect(wrapper.find('[data-block-id="sys-checkout"]').element.parentElement.classList.contains('lp-checkout-anchor')).toBe(false);
+  });
+
   it('applies typography props on the locked title', () => {
     const layout = {
       version: 1,

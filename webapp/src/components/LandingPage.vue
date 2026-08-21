@@ -12,7 +12,10 @@
    </script>
    <CircleSpinner v-if="parameters === null"></CircleSpinner>
    <div v-else>
-   <el-container :style="pageChromeStyle">
+   <el-container
+     :class="{ 'has-page-layout': hasPageLayout }"
+     :style="pageChromeStyle"
+   >
     <el-header height="auto" :style="{'background-color': parameters.template['key-page-header-color']}">
       <img
         v-if="parameters.template['key-logo']"
@@ -407,10 +410,20 @@ export default {
     }
   },
   computed: {
+    hasPageLayout () {
+      if (this.editorLayout) {
+        return true
+      }
+      var template = (this.parameters && this.parameters.template) || {}
+      return Boolean(parsePageLayout(template[PAGE_LAYOUT_TEMPLATE_KEY]))
+    },
     pageChromeStyle () {
       var template = (this.parameters && this.parameters.template) || {}
       var font = template['key-page-font-family']
-      var style = { backgroundColor: template['key-page-color'] }
+      var style = {}
+      if (!this.hasPageLayout) {
+        style.backgroundColor = template['key-page-color']
+      }
       if (font) {
         style.fontFamily = String(font).indexOf(',') >= 0
           ? font
@@ -451,6 +464,11 @@ export default {
     background-color: #f3f6f9;
     height: 100vh;
   }
+  .el-container.has-page-layout {
+    display: flex;
+    flex-direction: column;
+    background-color: transparent;
+  }
   .el-header {
     display: flex;
     align-items: center;
@@ -468,6 +486,13 @@ export default {
   }
   .el-main {
     display: block;
+  }
+  .el-container.has-page-layout .el-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
   }
   @media (max-width: 768px) {
     .el-header img {

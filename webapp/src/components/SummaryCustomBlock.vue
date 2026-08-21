@@ -1,5 +1,10 @@
 <template>
-  <div class="custom-block" :data-block-type="block.type" :style="{ textAlign: blockAlign }">
+  <div
+    class="custom-block"
+    :class="{ 'lp-checkout-anchor': block.type === 'system.checkoutPackage' }"
+    :data-block-type="block.type"
+    :style="{ textAlign: blockAlign }"
+  >
     <div
       v-if="block.type === 'system.title'"
       class="name"
@@ -121,7 +126,7 @@
 
 <script>
 import HelpFooter from './HelpFooter.vue'
-import { paddingStyleFromBlock, sanitizeInlineHtml } from '@/utils/page-layout'
+import { checkoutCtaSizeStyle, contentSizeStyle, paddingStyleFromBlock, sanitizeInlineHtml } from '@/utils/page-layout'
 
 export default {
   name: 'SummaryCustomBlock',
@@ -169,52 +174,45 @@ export default {
     },
     headingStyle () {
       var props = this.block.props || {}
-      return {
+      return Object.assign({
         fontSize: (props.fontSize || 24) + 'px',
         color: props.color || '#00152A',
         fontFamily: props.fontFamily || this.pageFontCss || 'Avenir, Helvetica, sans-serif',
         fontWeight: props.fontWeight || 600,
-        textAlign: this.blockAlign,
-        margin: 0
-      }
+        textAlign: this.blockAlign
+      }, contentSizeStyle(this.block))
     },
     textStyle () {
       var props = this.block.props || {}
-      return {
+      return Object.assign({
         fontSize: (props.fontSize || 16) + 'px',
         color: props.color || '#00152A',
         fontFamily: props.fontFamily || this.pageFontCss || 'Avenir, Helvetica, sans-serif',
         lineHeight: 1.5,
-        textAlign: this.blockAlign,
-        margin: 0
-      }
+        textAlign: this.blockAlign
+      }, contentSizeStyle(this.block))
     },
     imageStyle () {
-      var props = this.block.props || {}
       return Object.assign({
-        width: (props.width || 100) + '%',
-        maxWidth: '100%',
         height: 'auto',
-        display: 'block',
         marginBottom: 0
-      }, this.alignMargins)
+      }, contentSizeStyle(this.block))
     },
     buttonStyle () {
       var props = this.block.props || {}
       return Object.assign({
-        display: 'inline-block',
-        width: 'auto',
-        minWidth: '10rem',
+        display: 'block',
         textAlign: 'center',
         backgroundColor: props.backgroundColor || '#00152A',
         color: props.color || '#FFFFFF',
         border: 'none',
         borderRadius: '4px',
         textDecoration: 'none',
-        fontWeight: 600,
-        margin: 0,
+        fontSize: (props.fontSize || 16) + 'px',
+        fontFamily: props.fontFamily || this.pageFontCss || undefined,
+        fontWeight: props.fontWeight || 600,
         cursor: this.designMode ? 'default' : 'pointer'
-      }, paddingStyleFromBlock(this.block))
+      }, contentSizeStyle(this.block), paddingStyleFromBlock(this.block))
     },
     dividerStyle () {
       var props = this.block.props || {}
@@ -257,11 +255,15 @@ export default {
     },
     checkoutButtonStyle () {
       var color = (this.parameters && this.parameters.button_color) || '#00152A'
+      var props = (this.block && this.block.props) || {}
       return Object.assign({
-        width: '100%',
         backgroundColor: color,
-        borderColor: color
-      }, paddingStyleFromBlock(this.block))
+        borderColor: color,
+        color: props.color || '#FFFFFF',
+        fontSize: (props.fontSize || 16) + 'px',
+        fontFamily: props.fontFamily || this.pageFontCss || undefined,
+        fontWeight: props.fontWeight || 600
+      }, checkoutCtaSizeStyle(this.block), paddingStyleFromBlock(this.block))
     },
     hasTaxInfo () {
       return this.parameters && this.parameters.hasOwnProperty('displayInclusiveTax')
@@ -331,13 +333,16 @@ export default {
       if (props.fontWeight || defaultWeight) {
         style.fontWeight = props.fontWeight || defaultWeight
       }
-      return style
+      return Object.assign(style, contentSizeStyle(this.block))
     }
   }
 }
 </script>
 
 <style scoped>
+  .lp-checkout-anchor {
+    width: 100%;
+  }
   .lp-column {
     min-width: 0;
   }

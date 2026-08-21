@@ -1,34 +1,58 @@
 <template>
-  <el-card :shadow="'never'" :body-style="{'padding-bottom': 0}">
+  <div class="lp-page">
     <template v-if="!pageLayout">
-      <div class="name">{{ parameters.name }}</div>
-      <div class="description" v-html="descriptionWithLinks"></div>
-      <div class="pricing" v-if="!parameters.discount">{{ price }}</div>
-      <div class="pricing" v-if="parameters.discount">
-        <span class="old">{{ price }}</span>{{ priceWithDiscount }}
+      <div class="lp-card">
+        <div class="name">{{ parameters.name }}</div>
+        <div class="description" v-html="descriptionWithLinks"></div>
+        <div class="pricing" v-if="!parameters.discount">{{ price }}</div>
+        <div class="pricing" v-if="parameters.discount">
+          <span class="old">{{ price }}</span>{{ priceWithDiscount }}
+        </div>
+        <div class="tax-info" v-if="hasTaxInfo">
+          <span v-if="parameters.displayInclusiveTax">{{ ts('labels.priceIncludesTax', 'Price includes tax') }}</span>
+          <span v-else>{{ ts('labels.priceExcludesTax', 'Price does not include tax') }}</span>
+        </div>
+        <div class="remaining" v-if="parameters.globalLimit">
+          <span v-if="parameters.remaining">{{ ts('labels.onlyRemaining', 'Only {count} remaining', { count: parameters.remaining }) }}</span>
+          <span v-if="parameters.remaining === 0">{{ ts('labels.outOfStock', 'This item is out of stock!') }}</span>
+        </div>
+        <div class="lp-checkout-anchor">
+          <el-button type="primary" class="custom"
+              :disabled="parameters.globalLimit && parameters.remaining === 0"
+              :style="checkoutButtonStyle(null)"
+              @click="onCheckoutClick">
+            <span v-html="buttonTextHtml"></span>
+          </el-button>
+          <HelpFooter
+            :email="parameters.email"
+            :phone="parameters.phone"
+            :account-id="parameters.account_id"
+          />
+        </div>
       </div>
-      <div class="tax-info" v-if="hasTaxInfo">
-        <span v-if="parameters.displayInclusiveTax">{{ ts('labels.priceIncludesTax', 'Price includes tax') }}</span>
-        <span v-else>{{ ts('labels.priceExcludesTax', 'Price does not include tax') }}</span>
-      </div>
-      <div class="remaining" v-if="parameters.globalLimit">
-        <span v-if="parameters.remaining">{{ ts('labels.onlyRemaining', 'Only {count} remaining', { count: parameters.remaining }) }}</span>
-        <span v-if="parameters.remaining === 0">{{ ts('labels.outOfStock', 'This item is out of stock!') }}</span>
-      </div>
-      <el-button type="primary" class="custom"
-          :disabled="parameters.globalLimit && parameters.remaining === 0"
-          :style="checkoutButtonStyle(null)"
-          @click="onCheckoutClick">
-        <span v-html="buttonTextHtml"></span>
-      </el-button>
-      <HelpFooter
-        :email="parameters.email"
-        :phone="parameters.phone"
-        :account-id="parameters.account_id"
-      />
     </template>
 
     <template v-else>
+      <div
+        v-for="(row, rowIndex) in pageRows"
+        :key="'row-' + rowIndex"
+        class="lp-row"
+      >
+        <div
+          v-for="item in row"
+          :key="item.id"
+          :class="{
+            'lp-section': item.type === 'section',
+            'lp-page-card-wrap': item.type === 'card'
+          }"
+          :style="pageItemStyle(item)"
+        >
+          <div
+            v-for="card in cardsOf(item)"
+            :key="card.id"
+            class="lp-card"
+            :style="cardStyle(card, item)"
+          >
       <div
         v-if="designMode"
         class="drop-zone"
@@ -37,8 +61,9 @@
         @click.stop="onDropZoneClick(null)"
       ></div>
       <div
-        v-for="block in pageLayout.blocks"
+        v-for="block in card.children || []"
         :key="block.id"
+        :class="{ 'lp-checkout-anchor': isPinGroupStart(card.children, block.id) }"
       >
         <div
           class="block-shell"
@@ -101,15 +126,18 @@
           @click.stop="onDropZoneClick(block.id)"
         ></div>
       </div>
+          </div>
+        </div>
+      </div>
     </template>
-  </el-card>
+  </div>
 </template>
 <script>
 import EventBus from '@/event-bus'
 import HelpFooter from './HelpFooter.vue'
 import SummaryCustomBlock from './SummaryCustomBlock.vue'
 import translationMixin from '@/mixins/translationMixin'
-import { parsePageLayout, PAGE_LAYOUT_TEMPLATE_KEY, paddingStyleFromBlock, spacingStyleFromBlock, sanitizeInlineHtml } from '@/utils/page-layout'
+import { parsePageLayout, PAGE_LAYOUT_TEMPLATE_KEY, paddingStyleFromBlock, spacingStyleFromBlock, sanitizeInlineHtml, pageLayoutRows, cardChromeStyle, checkoutCtaSizeStyle, contentSizeStyle, sectionBackgroundStyle, sectionWidth, sectionMinHeight, isCardPairedInSection, isCardLastInRow, cardRowAlign, isPinGroupStart } from '@/utils/page-layout'
 import { postToParent } from '@/utils/design-mode-protocol'
 
 export default {
@@ -157,6 +185,7 @@ export default {
     this.reportSlots()
   },
   methods: {
+    isPinGroupStart: isPinGroupStart,
     onCheckoutClick () {
       if (this.designMode) {
         return
@@ -211,7 +240,7 @@ export default {
       if (props.fontWeight || defaultWeight) {
         style.fontWeight = props.fontWeight || defaultWeight
       }
-      return style
+      return Object.assign(style, contentSizeStyle(block))
     },
     blockAlign (block) {
       var align = block && block.props && block.props.align
@@ -227,11 +256,65 @@ export default {
     },
     checkoutButtonStyle (block) {
       var color = (this.parameters && this.parameters.button_color) || '#00152A'
-      return Object.assign({
-        width: '100%',
+      var props = (block && block.props) || {}
+      var style = {
         backgroundColor: color,
-        borderColor: color
-      }, paddingStyleFromBlock(block || { type: 'system.checkoutPackage' }))
+        borderColor: color,
+        color: props.color || '#FFFFFF',
+        fontSize: (props.fontSize || 16) + 'px',
+        fontWeight: props.fontWeight || 600
+      }
+      if (props.fontFamily) {
+        style.fontFamily = props.fontFamily
+      } else {
+        var template = this.parameters && this.parameters.template
+        var pageFont = template && template['key-page-font-family']
+        if (pageFont) {
+          style.fontFamily = String(pageFont).indexOf(',') >= 0
+            ? pageFont
+            : "'" + pageFont + "', Helvetica, Arial, sans-serif"
+        }
+      }
+      return Object.assign(style, checkoutCtaSizeStyle(block || { type: 'system.checkoutPackage' }), paddingStyleFromBlock(block || { type: 'system.checkoutPackage' }))
+    },
+    cardsOf (item) {
+      if (!item) return []
+      if (item.type === 'section') return item.children || []
+      if (item.type === 'card') return [item]
+      return []
+    },
+    pageItemStyle (item) {
+      if (item.type === 'section') {
+        var width = sectionWidth(item)
+        var minHeight = sectionMinHeight(item)
+        return Object.assign({}, sectionBackgroundStyle(item), {
+          flex: '0 0 ' + width + '%',
+          width: width + '%',
+          maxWidth: width + '%',
+          display: 'flex',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'stretch',
+          alignContent: 'stretch',
+          alignSelf: 'stretch',
+          rowGap: '16px',
+          columnGap: '0',
+          minHeight: minHeight + 'px',
+          boxSizing: 'border-box'
+        })
+      }
+      return { width: 'auto', maxWidth: '100%', marginLeft: 'auto', marginRight: 'auto' }
+    },
+    cardStyle (card, section) {
+      var inSection = section && section.type === 'section'
+      var children = inSection ? (section.children || []) : []
+      var paired = inSection && isCardPairedInSection(children, card.id)
+      return cardChromeStyle(card, {
+        inSection: Boolean(inSection),
+        paired: paired,
+        lastInRow: inSection && isCardLastInRow(children, card.id),
+        rowAlign: paired ? cardRowAlign(children, card.id) : undefined
+      })
     },
     reportSlots () {
       var self = this
@@ -289,6 +372,9 @@ export default {
       var template = this.parameters && this.parameters.template
       return parsePageLayout(template && template[PAGE_LAYOUT_TEMPLATE_KEY])
     },
+    pageRows () {
+      return pageLayoutRows((this.pageLayout && this.pageLayout.blocks) || [])
+    },
     buttonTextHtml () {
       var raw = this.parameters && this.parameters.button_text
       if (raw == null || raw === '') {
@@ -331,12 +417,50 @@ export default {
 }
 </script>
 <style scoped>
-  .el-card {
+  .lp-page {
     width: 100%;
-    max-width: 800px !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .lp-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    flex: 0 0 auto;
+    width: 100%;
+  }
+  .lp-section {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    align-content: stretch;
+    column-gap: 0;
+    row-gap: 16px;
+    height: auto;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  .lp-card {
+    width: 100%;
+    max-width: min(800px, 100%);
+    min-width: 0;
     margin-left: auto;
     margin-right: auto;
     background: white;
+    padding: 20px 20px 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    --card-pad-top: 20px;
+    --card-pad-right: 20px;
+    --card-pad-bottom: 0px;
+    --card-pad-left: 20px;
+  }
+  .lp-checkout-anchor {
+    margin-top: auto;
+    width: 100%;
   }
   .name {
     font-size: 1.125rem;
@@ -376,14 +500,15 @@ export default {
   }
   .footer {
     margin-top: 1rem;
+    margin-left: calc(-1 * var(--card-pad-left, 20px));
+    margin-right: calc(-1 * var(--card-pad-right, 20px));
+    margin-bottom: calc(-1 * var(--card-pad-bottom, 0px));
     padding: 1rem;
     background-color: rgb(235, 244, 250);
     font-size: .625rem;
     font-weight: 600;
     color: rgb(97, 112, 128);
     text-align: center;
-    margin-right: -20px;
-    margin-left: -20px;
   }
   .footer a {
     color: #2E4457;
